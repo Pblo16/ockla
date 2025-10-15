@@ -5,11 +5,14 @@ Ockla es una extensión de Visual Studio Code que te permite ejecutar código Ja
 ## ✨ Características
 
 - **Ejecución instantánea**: Ejecuta código JavaScript con un comando simple
+- **Soporte de módulos Node.js**: Importa y usa cualquier módulo de npm (`axios`, `lodash`, etc.)
+- **Sintaxis ES6 y CommonJS**: Soporta tanto `import` como `require`
 - **Panel de salida dedicado**: Visualiza resultados en un webview con formato elegante
 - **Auto-run**: Ejecuta automáticamente el código al guardar archivos (configurable)
 - **Entorno aislado**: El código se ejecuta en un contexto seguro usando VM
 - **Tiempo de ejecución**: Muestra el tiempo que tardó en ejecutarse el código
 - **Manejo de errores**: Visualización clara de errores con stack traces
+- **Operaciones asíncronas**: Soporta Promises, async/await, y callbacks
 
 ## 🚀 Uso
 
@@ -19,6 +22,58 @@ Ockla es una extensión de Visual Studio Code que te permite ejecutar código Ja
 - **Ockla: Clear Output** (`ockla.clearOutput`): Limpia el panel de salida
 - **Ockla: Toggle Auto-Run** (`ockla.toggleAutoRun`): Activa/desactiva la ejecución automática al guardar
 
+### Ejemplos de Uso
+
+#### Usando módulos de Node.js
+
+```javascript
+// Sintaxis ES6
+import axios from 'axios';
+
+axios.get('https://api.example.com/data')
+  .then(response => {
+    console.log('Data:', response.data);
+  })
+  .catch(error => {
+    console.error('Error:', error.message);
+  });
+```
+
+```javascript
+// Sintaxis CommonJS
+const fs = require('fs');
+const path = require('path');
+
+console.log('Current directory:', process.cwd());
+console.log('Node version:', process.version);
+```
+
+#### Expresiones simples
+
+```javascript
+2 + 2              // Muestra: 4
+6 + 2              // Muestra: 8
+
+const sum = (a, b) => a + b;
+sum(5, 3)          // Muestra: 8
+
+console.log('Hello, Ockla!');  // Muestra: Hello, Ockla!
+```
+
+#### Manejo de errores
+
+```javascript
+const riskyFunction = () => {
+  throw new Error('Something went wrong!');
+};
+
+try {
+  riskyFunction();
+} catch (error) {
+  console.error('Caught:', error.message);
+}
+```
+
 ### Atajos rápidos
 
 Puedes asignar atajos de teclado personalizados en VS Code:
@@ -26,14 +81,60 @@ Puedes asignar atajos de teclado personalizados en VS Code:
 2. Busca "Preferences: Open Keyboard Shortcuts"
 3. Busca "Ockla" y asigna tus atajos preferidos
 
+### 📂 Flujo de Trabajo Típico
+
+```bash
+# 1. Crea o abre tu proyecto
+cd ~/Projects/mi-proyecto
+
+# 2. Instala las dependencias que necesites (LOCAL, no global)
+pnpm install axios lodash
+
+# 3. Abre VS Code en ese directorio
+code .
+
+# 4. Crea un archivo JS y escribe tu código
+import axios from 'axios';
+// ... tu código
+
+# 5. Ejecuta con Ockla (Cmd+Shift+P -> Ockla: Run JS)
+# ✅ Buscará axios en ~/Projects/mi-proyecto/node_modules
+```
+
+**Ockla detecta automáticamente el workspace folder del archivo que estás editando**, así que siempre usará los módulos correctos del proyecto.
+
+## 📦 Requisitos
+
+### Usando módulos de Node.js
+
+Para usar módulos externos (como `axios`, `lodash`, etc.), debes instalarlos **localmente en tu proyecto**:
+
+```bash
+# En tu proyecto (NO global)
+cd /ruta/a/tu/proyecto
+npm install axios
+# o
+pnpm install axios
+```
+
+**⚠️ Importante**: 
+- ✅ Ockla busca módulos en el `node_modules` **local del workspace**
+- ❌ NO usa módulos instalados globalmente (`npm install -g`)
+- ✅ Detecta automáticamente el workspace folder del archivo actual
+- ✅ Soporta múltiples workspaces en VS Code
+
+Los módulos integrados de Node.js (`fs`, `path`, `os`, etc.) están disponibles sin instalación.
+
 ## ⚙️ Configuración
 
 Esta extensión contribuye las siguientes configuraciones:
 
 - **`ockla.autoRunOnSave`**: Ejecutar automáticamente archivos JavaScript al guardar (default: `false`)
+- **`ockla.autoShowPanel`**: Cambiar automáticamente al panel de salida al ejecutar (default: `false`)
 - **`ockla.showExecutionTime`**: Mostrar tiempo de ejecución en el panel de salida (default: `true`)
 - **`ockla.maxOutputLength`**: Longitud máxima de salida a mostrar en caracteres (default: `10000`)
 - **`ockla.executionTimeout`**: Tiempo máximo de ejecución en milisegundos (default: `5000`)
+- **`ockla.asyncTimeout`**: Tiempo de espera para operaciones asíncronas (setTimeout, Promises) en ms (default: `500`)
 
 ### Ejemplo de configuración
 
@@ -42,9 +143,18 @@ Esta extensión contribuye las siguientes configuraciones:
   "ockla.autoRunOnSave": true,
   "ockla.showExecutionTime": true,
   "ockla.maxOutputLength": 15000,
-  "ockla.executionTimeout": 10000
+  "ockla.executionTimeout": 10000,
+  "ockla.asyncTimeout": 1000
 }
 ```
+
+### Nota sobre Operaciones Asíncronas
+
+Ockla espera un tiempo configurable (`asyncTimeout`) para que las operaciones asíncronas se completen. Por defecto son 500ms. 
+
+- Si tu código tiene `setTimeout` con más de 500ms, aumenta `asyncTimeout`
+- Ejemplo: para un `setTimeout` de 2 segundos, configura `"ockla.asyncTimeout": 2500`
+- Las Promises y async/await también respetan este timeout
 
 ## 📁 Estructura del Proyecto
 

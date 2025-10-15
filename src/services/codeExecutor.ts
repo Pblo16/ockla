@@ -1,5 +1,7 @@
 import { Script, createContext } from 'vm';
 import type { ExecutionResult, CodeExecutionOptions } from '../types';
+import * as module from 'module';
+import * as path from 'path';
 
 /**
  * Service responsible for executing JavaScript code in a sandboxed environment
@@ -18,6 +20,17 @@ export class CodeExecutor {
     const outputs: string[] = [];
 
     try {
+      // Convert ES6 imports to require statements
+      const processedCode = this.convertImportsToRequire(code);
+
+      // Use the working directory from options, or fall back to process.cwd()
+      const workingDir = options.workingDirectory || process.cwd();
+
+      // Create a custom require function from the working directory
+      // This ensures we look for node_modules in the project directory, not globally
+      const Module = require('module');
+      const customRequire = Module.createRequire(path.join(workingDir, 'package.json'));
+
       // Create isolated context for code execution with output capturing
       const vmContext = createContext({
         console: {
@@ -34,15 +47,43 @@ export class CodeExecutor {
             outputs.push(`[WARN] ${output}`);
           },
         },
+        require: customRequire,
+        module: { exports: {} },
+        exports: {},
+        __dirname: workingDir,
+        __filename: path.join(workingDir, 'script.js'),
+        // Add common Node.js globals
+        Buffer,
+        global,
+        setTimeout,
+        setInterval,
+        setImmediate,
+        clearTimeout,
+        clearInterval,
+        clearImmediate,
+        Promise,
+        process: {
+          env: process.env,
+          cwd: () => process.cwd(),
+          version: process.version,
+          versions: process.versions,
+          platform: process.platform,
+          arch: process.arch,
+          nextTick: process.nextTick,
+        },
       });
 
-      // Wrap code to capture all expression results
-      const wrappedCode = this.wrapCodeToCapture(code);
+      // Wrap code to capture all expression results and wait for async operations
+      const wrappedCode = this.wrapCodeForAsync(processedCode);
       const script = new Script(wrappedCode);
 
       script.runInContext(vmContext, {
         timeout: options.timeout || this.defaultTimeout,
       });
+
+      // Wait for async operations to complete
+      const asyncTimeout = options.asyncTimeout || 500;
+      await this.waitForAsyncOperations(asyncTimeout);
 
       const executionTime = Date.now() - startTime;
       const output = outputs.length > 0 ? outputs.join('\n') : '(sin salida)';
@@ -63,6 +104,33 @@ export class CodeExecutor {
         executionTime,
       };
     }
+  }
+
+  /**
+   * Converts ES6 import statements to CommonJS require
+   * @param code - The code with ES6 imports
+   * @returns Code with require statements
+   */
+  private convertImportsToRequire(code: string): string {
+    // Convert: import axios from 'axios' -> const axios = require('axios')
+    code = code.replace(
+      /import\s+(\w+)\s+from\s+['"]([^'"]+)['"]/g,
+      'const $1 = require(\'$2\')'
+    );
+
+    // Convert: import { a, b } from 'module' -> const { a, b } = require('module')
+    code = code.replace(
+      /import\s+\{([^}]+)\}\s+from\s+['"]([^'"]+)['"]/g,
+      'const {$1} = require(\'$2\')'
+    );
+
+    // Convert: import * as name from 'module' -> const name = require('module')
+    code = code.replace(
+      /import\s+\*\s+as\s+(\w+)\s+from\s+['"]([^'"]+)['"]/g,
+      'const $1 = require(\'$2\')'
+    );
+
+    return code;
   }
 
   /**
@@ -166,6 +234,26 @@ export class CodeExecutor {
     } catch {
       return String(value);
     }
+  }
+
+  /**
+   * Wraps code for async execution
+   * @param code - The original code
+   * @returns Wrapped code
+   */
+  private wrapCodeForAsync(code: string): string {
+    // Use the existing wrap method
+    return this.wrapCodeToCapture(code);
+  }
+
+  /**
+   * Waits for async operations to complete
+   * @param timeout - Maximum time to wait in milliseconds
+   */
+  private async waitForAsyncOperations(timeout: number): Promise<void> {
+    return new Promise((resolve) => {
+      setTimeout(resolve, timeout);
+    });
   }
 
   /**

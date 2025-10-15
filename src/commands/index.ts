@@ -30,8 +30,23 @@ export class RunCodeCommand {
       return;
     }
 
+    // Get the working directory from the file's location
+    const workspaceFolder = vscode.workspace.getWorkspaceFolder(editor.document.uri);
+    const workingDirectory = workspaceFolder ? workspaceFolder.uri.fsPath :
+      vscode.workspace.workspaceFolders?.[0]?.uri.fsPath ||
+      process.cwd();
+
+    // Get configuration
+    const config = vscode.workspace.getConfiguration('ockla');
+    const executionTimeout = config.get<number>('executionTimeout', 5000);
+    const asyncTimeout = config.get<number>('asyncTimeout', 500);
+
     // Execute code
-    const result = await this.codeExecutor.execute(code);
+    const result = await this.codeExecutor.execute(code, {
+      timeout: executionTimeout,
+      asyncTimeout: asyncTimeout,
+      workingDirectory: workingDirectory,
+    });
 
     // Update panel with results and show it (manual execution)
     this.outputPanel.update(result, true);

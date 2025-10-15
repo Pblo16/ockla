@@ -19,4 +19,6 @@ export interface OcklaConfiguration {
 export interface CodeExecutionOptions {
   timeout?: number;
   memory?: number;
+  asyncTimeout?: number;
+  workingDirectory?: string;
 }

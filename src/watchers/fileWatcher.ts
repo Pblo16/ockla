@@ -81,8 +81,22 @@ export class FileWatcher {
       return;
     }
 
+    // Get the working directory from the file's location
+    const workspaceFolder = vscode.workspace.getWorkspaceFolder(uri);
+    const workingDirectory = workspaceFolder ? workspaceFolder.uri.fsPath :
+      vscode.workspace.workspaceFolders?.[0]?.uri.fsPath ||
+      process.cwd();
+
+    // Get execution options from configuration
+    const executionTimeout = config.get<number>('executionTimeout', 5000);
+    const asyncTimeout = config.get<number>('asyncTimeout', 500);
+
     // Execute code
-    const result = await this.codeExecutor.execute(code);
+    const result = await this.codeExecutor.execute(code, {
+      timeout: executionTimeout,
+      asyncTimeout: asyncTimeout,
+      workingDirectory: workingDirectory,
+    });
 
     // Check if we should auto-show the panel
     const autoShowPanel = config.get<boolean>('autoShowPanel', false);

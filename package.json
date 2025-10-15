@@ -53,6 +53,11 @@
           "type": "boolean",
           "default": false,
           "description": "Automatically switch to output panel when auto-running on save"
+        },
+        "ockla.asyncTimeout": {
+          "type": "number",
+          "default": 500,
+          "description": "Time to wait for async operations (setTimeout, Promises) in milliseconds"
         }
       }
     }
