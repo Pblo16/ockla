@@ -168,6 +168,13 @@ export class OutputPanel {
       return false;
     }
 
+    // Don't do incremental updates if there are HTML tables
+    // Tables need full re-render to display correctly
+    if (oldResult.output.includes('<table class="data-table">') ||
+      newResult.output.includes('<table class="data-table">')) {
+      return false;
+    }
+
     return true;
   }
 
