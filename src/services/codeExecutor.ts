@@ -31,6 +31,47 @@ export class CodeExecutor {
       const Module = require('module');
       const customRequire = Module.createRequire(path.join(workingDir, 'package.json'));
 
+      // Prepare fetch and related Web APIs for the VM context
+      let fetchFn: any = (globalThis as any).fetch;
+      let HeadersCtor: any = (globalThis as any).Headers;
+      let RequestCtor: any = (globalThis as any).Request;
+      let ResponseCtor: any = (globalThis as any).Response;
+      let AbortControllerCtor: any = (globalThis as any).AbortController;
+      let FormDataCtor: any = (globalThis as any).FormData;
+      let URLCtor: any = (globalThis as any).URL;
+      let URLSearchParamsCtor: any = (globalThis as any).URLSearchParams;
+
+      if (!fetchFn) {
+        try {
+          // Prefer undici if available locally in the project
+          const undici = customRequire('undici');
+          fetchFn = undici.fetch;
+          HeadersCtor = undici.Headers;
+          RequestCtor = undici.Request;
+          ResponseCtor = undici.Response;
+          AbortControllerCtor = undici.AbortController;
+          // FormData, URL, URLSearchParams may also be provided by undici in recent versions
+          FormDataCtor = (undici as any).FormData || FormDataCtor;
+          URLCtor = (undici as any).URL || URLCtor;
+          URLSearchParamsCtor = (undici as any).URLSearchParams || URLSearchParamsCtor;
+        } catch (_) {
+          // If undici is not installed, keep fetch undefined and we will expose a helpful error function
+        }
+      }
+
+      // Prepare crypto (Web Crypto API / Node crypto)
+      let cryptoGlobal: any = (globalThis as any).crypto;
+      if (!cryptoGlobal) {
+        try {
+          // Try Node's crypto
+          const nodeCrypto = customRequire('crypto');
+          // Prefer webcrypto if available (Node >= 15)
+          cryptoGlobal = (nodeCrypto as any).webcrypto || nodeCrypto;
+        } catch (_) {
+          // leave undefined; we will provide a helpful message on access
+        }
+      }
+
       // Create isolated context for code execution with output capturing
       const vmContext = createContext({
         console: {
@@ -62,6 +103,34 @@ export class CodeExecutor {
         clearInterval,
         clearImmediate,
         Promise,
+        // Web-like APIs
+        fetch: fetchFn || ((..._args: any[]) => { throw new Error("fetch is not available. Use Node >= 18 or install 'undici' locally (pnpm add undici)."); }),
+        Headers: HeadersCtor,
+        Request: RequestCtor,
+        Response: ResponseCtor,
+        AbortController: AbortControllerCtor,
+        FormData: FormDataCtor,
+        URL: URLCtor,
+        URLSearchParams: URLSearchParamsCtor,
+        // Crypto API
+        crypto: cryptoGlobal || new Proxy({}, {
+          get() {
+            throw new Error("crypto is not available. Use Node >= 16 (webcrypto) or install Node's 'crypto' module (built-in). If this persists, ensure your runtime provides globalThis.crypto.");
+          }
+        }),
+        // Polyfills / Web-like APIs
+        atob: (str: string) => Buffer.from(str, 'base64').toString('binary'),
+        btoa: (str: string) => Buffer.from(str, 'binary').toString('base64'),
+        TextEncoder: (globalThis as any).TextEncoder || (require('util').TextEncoder),
+        TextDecoder: (globalThis as any).TextDecoder || (require('util').TextDecoder),
+        performance: (globalThis as any).performance || (function () { try { return require('perf_hooks').performance; } catch { return undefined; } })(),
+        structuredClone: (globalThis as any).structuredClone || (function () { try { const { serialize, deserialize } = require('v8'); return (v: any) => deserialize(serialize(v)); } catch { return (v: any) => JSON.parse(JSON.stringify(v)); } })(),
+        queueMicrotask: (globalThis as any).queueMicrotask || ((cb: Function) => Promise.resolve().then(() => cb())),
+        Blob: (globalThis as any).Blob || (function () { try { return require('buffer').Blob; } catch { return undefined; } })(),
+        navigator: {
+          userAgent: `Ockla/${process.versions.node} Node/${process.version}`,
+          platform: process.platform,
+        },
         process: {
           env: process.env,
           cwd: () => process.cwd(),
@@ -72,6 +141,13 @@ export class CodeExecutor {
           nextTick: process.nextTick,
         },
       });
+
+      // Ensure window/self aliases exist in the VM global
+      try {
+        const sandboxGlobal = new Script('globalThis').runInContext(vmContext);
+        (sandboxGlobal as any).window = sandboxGlobal;
+        (sandboxGlobal as any).self = sandboxGlobal;
+      } catch { /* ignore */ }
 
       // Wrap code to capture all expression results and wait for async operations
       const wrappedCode = this.wrapCodeForAsync(processedCode);

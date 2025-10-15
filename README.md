@@ -48,6 +48,21 @@ console.log('Current directory:', process.cwd());
 console.log('Node version:', process.version);
 ```
 
+#### Usando fetch (HTTP nativo)
+
+```javascript
+// Node >= 18 ya incluye fetch global
+const res = await fetch('https://jsonplaceholder.typicode.com/posts/1');
+const data = await res.json();
+console.log('Data fetched using fetch:', data);
+```
+
+Si tu entorno no expone `fetch` (Node < 18), instala `undici` en tu proyecto y Ockla lo usará automáticamente:
+
+```bash
+pnpm add undici   # o npm install undici
+```
+
 #### Expresiones simples
 
 ```javascript
