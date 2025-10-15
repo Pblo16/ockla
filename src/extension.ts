@@ -12,7 +12,7 @@ import { COMMANDS } from './constants';
 export function activate(context: vscode.ExtensionContext) {
 	// Initialize services
 	const codeExecutor = new CodeExecutor();
-	const outputPanel = new OutputPanel();
+	const outputPanel = new OutputPanel(context);
 	const fileWatcher = new FileWatcher(codeExecutor, outputPanel);
 
 	// Initialize commands

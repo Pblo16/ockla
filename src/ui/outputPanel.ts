@@ -1,4 +1,6 @@
 import * as vscode from 'vscode';
+import * as path from 'path';
+import * as fs from 'fs';
 import { WEBVIEW_ID, WEBVIEW_TITLE } from '../constants';
 import type { ExecutionResult } from '../types';
 
@@ -8,9 +10,10 @@ import type { ExecutionResult } from '../types';
 export class OutputPanel {
   private panel: vscode.WebviewPanel | undefined;
   private disposables: vscode.Disposable[] = [];
+  private context: vscode.ExtensionContext;
 
-  constructor() {
-    // Panel is created lazily
+  constructor(context: vscode.ExtensionContext) {
+    this.context = context;
   }
 
   /**
@@ -100,86 +103,42 @@ export class OutputPanel {
     const theme = this.getThemeStyles();
     const statusClass = result.success ? 'success' : 'error';
     const statusIcon = result.success ? '✓' : '✗';
+    const statusText = result.success ? 'Ejecución exitosa' : 'Error en la ejecución';
 
-    return `<!DOCTYPE html>
-<html lang="en">
-<head>
-	<meta charset="UTF-8">
-	<meta name="viewport" content="width=device-width, initial-scale=1.0">
-	<title>${WEBVIEW_TITLE}</title>
-	<style>
-		${theme}
-		body {
-			font-family: var(--vscode-font-family);
-			font-size: var(--vscode-font-size);
-			color: var(--vscode-foreground);
-			background-color: var(--vscode-editor-background);
-			padding: 20px;
-			margin: 0;
-		}
-		.header {
-			display: flex;
-			align-items: center;
-			gap: 10px;
-			margin-bottom: 15px;
-			padding-bottom: 10px;
-			border-bottom: 1px solid var(--vscode-panel-border);
-		}
-		.status {
-			display: flex;
-			align-items: center;
-			gap: 5px;
-			font-weight: bold;
-		}
-		.status.success {
-			color: var(--vscode-testing-iconPassed);
-		}
-		.status.error {
-			color: var(--vscode-testing-iconFailed);
-		}
-		.execution-time {
-			margin-left: auto;
-			color: var(--vscode-descriptionForeground);
-			font-size: 0.9em;
-		}
-		.output {
-			white-space: pre-wrap;
-			word-wrap: break-word;
-			font-family: var(--vscode-editor-font-family);
-			background-color: var(--vscode-textCodeBlock-background);
-			padding: 15px;
-			border-radius: 4px;
-			border: 1px solid var(--vscode-panel-border);
-			overflow-x: auto;
-		}
-		.error-message {
-			color: var(--vscode-errorForeground);
-			background-color: var(--vscode-inputValidation-errorBackground);
-			border: 1px solid var(--vscode-inputValidation-errorBorder);
-			padding: 15px;
-			border-radius: 4px;
-			margin-top: 10px;
-		}
-		.empty {
-			color: var(--vscode-descriptionForeground);
-			font-style: italic;
-		}
-	</style>
-</head>
-<body>
-	<div class="header">
-		<div class="status ${statusClass}">
-			<span>${statusIcon}</span>
-			<span>${result.success ? 'Ejecución exitosa' : 'Error en la ejecución'}</span>
-		</div>
-		${result.executionTime ? `<div class="execution-time">${result.executionTime}ms</div>` : ''}
-	</div>
-	
-	${result.output ? `<div class="output">${this.escapeHtml(result.output)}</div>` : ''}
-	${!result.output && result.success ? '<div class="output empty">Sin salida</div>' : ''}
-	${result.error ? `<div class="error-message">${this.escapeHtml(result.error)}</div>` : ''}
-</body>
-</html>`;
+    // Read the HTML template
+    const htmlPath = path.join(this.context.extensionPath, 'src', 'ui', 'index.html');
+    let htmlTemplate = fs.readFileSync(htmlPath, 'utf8');
+
+    // Prepare conditional HTML sections
+    const executionTimeHtml = result.executionTime
+      ? `<div class="execution-time">${result.executionTime}ms</div>`
+      : '';
+
+    const outputHtml = result.output
+      ? `<div class="output">${this.escapeHtml(result.output)}</div>`
+      : '';
+
+    const emptyOutputHtml = !result.output && result.success
+      ? '<div class="output empty">Sin salida</div>'
+      : '';
+
+    const errorHtml = result.error
+      ? `<div class="error-message">${this.escapeHtml(result.error)}</div>`
+      : '';
+
+    // Replace template variables
+    htmlTemplate = htmlTemplate
+      .replace(/\{\{theme\}\}/g, theme)
+      .replace(/\{\{WEBVIEW_TITLE\}\}/g, WEBVIEW_TITLE)
+      .replace(/\{\{statusClass\}\}/g, statusClass)
+      .replace(/\{\{statusIcon\}\}/g, statusIcon)
+      .replace(/\{\{statusText\}\}/g, statusText)
+      .replace(/\{\{executionTimeHtml\}\}/g, executionTimeHtml)
+      .replace(/\{\{outputHtml\}\}/g, outputHtml)
+      .replace(/\{\{emptyOutputHtml\}\}/g, emptyOutputHtml)
+      .replace(/\{\{errorHtml\}\}/g, errorHtml);
+
+    return htmlTemplate;
   }
 
   /**

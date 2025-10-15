@@ -151,7 +151,9 @@ export class CodeExecutor {
 
       // Wrap code to capture all expression results and wait for async operations
       const wrappedCode = this.wrapCodeForAsync(processedCode);
-      const script = new Script(wrappedCode);
+      // Wrap in void to prevent last expression from being captured
+      const finalCode = `void (async function() {\n${wrappedCode}\n})();`;
+      const script = new Script(finalCode);
 
       script.runInContext(vmContext, {
         timeout: options.timeout || this.defaultTimeout,
@@ -215,16 +217,13 @@ export class CodeExecutor {
    * @returns Wrapped code that logs all expressions
    */
   private wrapCodeToCapture(code: string): string {
-    // Split code into lines for analysis
+    // Split code into statements more intelligently
     const lines = code.split('\n');
     const wrappedLines: string[] = [];
 
-    // Keywords that indicate we should not wrap
-    const skipKeywords = [
-      'const', 'let', 'var', 'function', 'class', 'import', 'export',
-      'if', 'else', 'for', 'while', 'do', 'switch', 'case', 'default',
-      'try', 'catch', 'finally', 'throw', 'return', 'break', 'continue'
-    ];
+    // Track context: are we inside a multi-line structure?
+    let insideMultiLine = false;
+    let bracketDepth = 0;
 
     for (let i = 0; i < lines.length; i++) {
       const line = lines[i];
@@ -236,31 +235,57 @@ export class CodeExecutor {
         continue;
       }
 
-      // Skip lines with control flow keywords
-      const startsWithKeyword = skipKeywords.some(keyword =>
-        trimmedLine.startsWith(keyword + ' ') || trimmedLine.startsWith(keyword + '(')
-      );
-
-      if (startsWithKeyword) {
-        wrappedLines.push(line);
-        continue;
-      }
-
       // Skip console statements (they already log)
       if (trimmedLine.includes('console.')) {
         wrappedLines.push(line);
         continue;
       }
 
-      // Skip structural characters
-      if (trimmedLine === '{' || trimmedLine === '}' || trimmedLine === '};' ||
-        trimmedLine.endsWith('{') || trimmedLine === '})' || trimmedLine === ');') {
+      // Check for variable declarations - just keep them as is (no auto-log)
+      const varMatch = trimmedLine.match(/^(const|let|var)\s+(\w+)\s*=/);
+      if (varMatch) {
+        wrappedLines.push(line);
+        // Check if this starts a multi-line structure
+        if (trimmedLine.includes('[') || trimmedLine.includes('{')) {
+          insideMultiLine = true;
+          bracketDepth = (trimmedLine.match(/[\[{]/g) || []).length - (trimmedLine.match(/[\]}]/g) || []).length;
+          if (bracketDepth === 0) {
+            insideMultiLine = false;
+          }
+        }
+        continue;
+      }
+
+      // If inside a multi-line structure, just add the line without processing
+      if (insideMultiLine) {
+        wrappedLines.push(line);
+        // Update bracket depth
+        const openCount = (trimmedLine.match(/[\[{]/g) || []).length;
+        const closeCount = (trimmedLine.match(/[\]}]/g) || []).length;
+        bracketDepth += openCount - closeCount;
+
+        // Check if we're done with the multi-line structure
+        if (bracketDepth <= 0) {
+          insideMultiLine = false;
+          bracketDepth = 0;
+        }
+        continue;
+      }
+
+      // Skip control flow keywords
+      if (this.isControlFlowStatement(trimmedLine)) {
         wrappedLines.push(line);
         continue;
       }
 
-      // Check if it's a simple expression to wrap
-      if (this.isSimpleExpression(trimmedLine)) {
+      // Skip structural characters
+      if (this.isStructuralLine(trimmedLine)) {
+        wrappedLines.push(line);
+        continue;
+      }
+
+      // Check if it's an expression that should be auto-logged
+      if (this.shouldAutoLog(trimmedLine)) {
         const indent = line.match(/^\s*/)?.[0] || '';
         wrappedLines.push(`${indent}console.log(${trimmedLine})`);
       } else {
@@ -272,19 +297,68 @@ export class CodeExecutor {
   }
 
   /**
-   * Checks if a line is a simple expression that should be logged
+   * Checks if a line is a control flow statement
    * @param line - The trimmed line to check
-   * @returns true if it's a simple expression
+   * @returns true if it's a control flow statement
    */
-  private isSimpleExpression(line: string): boolean {
-    // Only wrap very simple expressions
-    const simplePatterns = [
-      /^\d+\s*[\+\-\*\/\%]\s*\d+$/,  // Pure math: 2 + 2
-      /^[\w]+\(\s*\)$/,              // Simple function calls: myFunc()
-      /^[\w]+\s*[\+\-\*\/]\s*[\w]+$/, // Variable math: a + b
+  private isControlFlowStatement(line: string): boolean {
+    const controlKeywords = [
+      'function', 'class', 'import', 'export',
+      'if', 'else', 'for', 'while', 'do', 'switch', 'case', 'default',
+      'try', 'catch', 'finally', 'throw', 'return', 'break', 'continue'
     ];
 
-    return simplePatterns.some(pattern => pattern.test(line));
+    return controlKeywords.some(keyword =>
+      line.startsWith(keyword + ' ') ||
+      line.startsWith(keyword + '(') ||
+      line.startsWith(keyword + '{')
+    );
+  }
+
+  /**
+   * Checks if a line is structural (braces, etc)
+   * @param line - The trimmed line to check
+   * @returns true if it's structural
+   */
+  private isStructuralLine(line: string): boolean {
+    return (
+      line === '{' ||
+      line === '}' ||
+      line === '};' ||
+      line.endsWith('{') ||
+      line === '})' ||
+      line === ');' ||
+      line === ']' ||
+      line === '],'
+    );
+  }
+
+  /**
+   * Checks if a line should be auto-logged
+   * @param line - The trimmed line to check
+   * @returns true if it should be auto-logged
+   */
+  private shouldAutoLog(line: string): boolean {
+    // Don't log if line ends with semicolon in some cases
+    const lineWithoutSemicolon = line.replace(/;$/, '');
+
+    // Patterns that should be auto-logged:
+    // 1. Function/method calls: crypto.randomUUID(), Number.isSafeInteger(10)
+    // 2. Property access: obj.prop, array[0]
+    // 3. Math expressions: 2 + 2, a * b
+    // 4. Variable references: myVar
+    const autoLogPatterns = [
+      /^[\w.]+\([^)]*\)$/,              // Function calls: func(), obj.method(), crypto.randomUUID()
+      /^[\w.]+\[[^\]]+\]$/,             // Array/object access: arr[0], obj['key']
+      /^[\w.]+$/,                       // Simple identifiers: myVar, obj.prop
+      /^\d+\s*[\+\-\*\/\%]\s*.+$/,      // Math expressions: 2 + 2
+      /^.+\s*[\+\-\*\/\%]\s*.+$/,       // Variable math: a + b
+      /^new\s+\w+\([^)]*\)$/,           // Constructor calls: new Date()
+      /^\[.*\]$/,                        // Array literals when alone: [1, 2, 3]
+      /^\{.*\}$/,                        // Object literals when alone (but not blocks)
+    ];
+
+    return autoLogPatterns.some(pattern => pattern.test(lineWithoutSemicolon));
   }
 
   /**

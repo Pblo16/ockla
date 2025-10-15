@@ -1,0 +1,166 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>{{WEBVIEW_TITLE}}</title>
+  <style>
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      font-family: var(--vscode-font-family);
+      font-size: var(--vscode-font-size);
+      color: var(--vscode-foreground);
+      background-color: var(--vscode-editor-background);
+      padding: 0;
+      margin: 0;
+      line-height: 1.6;
+    }
+
+    .header {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 16px 20px;
+      background-color: var(--vscode-sideBar-background);
+      border-bottom: 2px solid var(--vscode-panel-border);
+      position: sticky;
+      top: 0;
+      z-index: 10;
+      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+    }
+
+    .status {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-weight: 600;
+      font-size: 1.05em;
+      padding: 6px 12px;
+      border-radius: 6px;
+      transition: all 0.2s ease;
+    }
+
+    .status.success {
+      color: var(--vscode-testing-iconPassed);
+      background-color: rgba(var(--vscode-testing-iconPassed-rgb, 115, 201, 144), 0.15);
+    }
+
+    .status.error {
+      color: var(--vscode-testing-iconFailed);
+      background-color: rgba(var(--vscode-testing-iconFailed-rgb, 247, 85, 85), 0.15);
+    }
+
+    .status span:first-child {
+      font-size: 1.2em;
+      line-height: 1;
+    }
+
+    .execution-time {
+      margin-left: auto;
+      color: var(--vscode-descriptionForeground);
+      font-size: 0.9em;
+      font-weight: 500;
+      background-color: var(--vscode-badge-background);
+      color: var(--vscode-badge-foreground);
+      padding: 4px 10px;
+      border-radius: 12px;
+    }
+
+    .output {
+      white-space: pre-wrap;
+      word-wrap: break-word;
+      font-family: var(--vscode-editor-font-family);
+      font-size: 0.95em;
+      background-color: var(--vscode-textCodeBlock-background);
+      padding: 20px;
+      margin: 20px;
+      border-radius: 8px;
+      border: 1px solid var(--vscode-panel-border);
+      overflow-x: auto;
+      line-height: 1.7;
+      box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+      max-height: calc(100vh - 120px);
+      overflow-y: auto;
+    }
+
+    .output::-webkit-scrollbar {
+      width: 10px;
+      height: 10px;
+    }
+
+    .output::-webkit-scrollbar-track {
+      background: var(--vscode-editor-background);
+      border-radius: 4px;
+    }
+
+    .output::-webkit-scrollbar-thumb {
+      background: var(--vscode-scrollbarSlider-background);
+      border-radius: 4px;
+    }
+
+    .output::-webkit-scrollbar-thumb:hover {
+      background: var(--vscode-scrollbarSlider-hoverBackground);
+    }
+
+    .error-message {
+      color: var(--vscode-errorForeground);
+      background-color: var(--vscode-inputValidation-errorBackground);
+      border: 2px solid var(--vscode-inputValidation-errorBorder);
+      padding: 16px 20px;
+      margin: 20px;
+      border-radius: 8px;
+      border-left: 4px solid var(--vscode-errorForeground);
+      font-family: var(--vscode-editor-font-family);
+      line-height: 1.6;
+      box-shadow: 0 2px 6px rgba(247, 85, 85, 0.2);
+    }
+
+    .empty {
+      color: var(--vscode-descriptionForeground);
+      font-style: italic;
+      text-align: center;
+      padding: 40px 20px;
+      font-size: 1.1em;
+      opacity: 0.7;
+    }
+
+    /* Animaciones sutiles */
+    @keyframes fadeIn {
+      from {
+        opacity: 0;
+        transform: translateY(-10px);
+      }
+
+      to {
+        opacity: 1;
+        transform: translateY(0);
+      }
+    }
+
+    .output,
+    .error-message,
+    .empty {
+      animation: fadeIn 0.3s ease-out;
+    }
+  </style>
+</head>
+
+<body>
+  <div class="header">
+    <div class="status {{statusClass}}">
+      <span>{{statusIcon}}</span>
+      <span>{{statusText}}</span>
+    </div>
+    {{executionTimeHtml}}
+  </div>
+
+  {{outputHtml}}
+  {{emptyOutputHtml}}
+  {{errorHtml}}
+</body>
+
+</html>
