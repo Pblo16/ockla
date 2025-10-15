@@ -8,6 +8,7 @@ export const COMMANDS = {
   RUN_CODE: 'ockla.runCode',
   TOGGLE_AUTO_RUN: 'ockla.toggleAutoRun',
   CLEAR_OUTPUT: 'ockla.clearOutput',
+  STOP_EXECUTION: 'ockla.stopExecution',
 } as const;
 
 export const WEBVIEW_ID = 'ocklaOutput';

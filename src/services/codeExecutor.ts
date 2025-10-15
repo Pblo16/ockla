@@ -8,6 +8,17 @@ import * as path from 'path';
  */
 export class CodeExecutor {
   private readonly defaultTimeout = 5000; // 5 seconds
+  private abortController: AbortController | null = null;
+
+  /**
+   * Stops any currently running execution
+   */
+  stopExecution(): void {
+    if (this.abortController) {
+      this.abortController.abort();
+      this.abortController = null;
+    }
+  }
 
   /**
    * Executes JavaScript code and returns the result
@@ -18,6 +29,9 @@ export class CodeExecutor {
   async execute(code: string, options: CodeExecutionOptions = {}): Promise<ExecutionResult> {
     const startTime = Date.now();
     const outputs: string[] = [];
+
+    // Create a new abort controller for this execution
+    this.abortController = new AbortController();
 
     try {
       // Convert ES6 imports to require statements
@@ -151,16 +165,27 @@ export class CodeExecutor {
 
       // Wrap code to capture all expression results and wait for async operations
       const wrappedCode = this.wrapCodeForAsync(processedCode);
-      // Wrap in void to prevent last expression from being captured
-      const finalCode = `void (async function() {\n${wrappedCode}\n})();`;
+      // Wrap in an immediately invoked async function to handle promises
+      const finalCode = `(async function() {\n${wrappedCode}\n})()`;
       const script = new Script(finalCode);
 
-      script.runInContext(vmContext, {
+      const result = script.runInContext(vmContext, {
         timeout: options.timeout || this.defaultTimeout,
       });
 
-      // Wait for async operations to complete
-      const asyncTimeout = options.asyncTimeout || 500;
+      // Wait for the async function to complete (if it returns a promise)
+      if (result && result.then && typeof result.then === 'function') {
+        try {
+          await result;
+        } catch (err) {
+          // Promise rejection handled here
+          const errorMessage = err instanceof Error ? err.message : String(err);
+          outputs.push(`[ERROR] ${errorMessage}`);
+        }
+      }
+
+      // Additional wait for any remaining async operations
+      const asyncTimeout = options.asyncTimeout || 2000;
       await this.waitForAsyncOperations(asyncTimeout);
 
       const executionTime = Date.now() - startTime;
@@ -224,6 +249,7 @@ export class CodeExecutor {
     // Track context: are we inside a multi-line structure?
     let insideMultiLine = false;
     let bracketDepth = 0;
+    let insideChainedCall = false;
 
     for (let i = 0; i < lines.length; i++) {
       const line = lines[i];
@@ -268,6 +294,26 @@ export class CodeExecutor {
         if (bracketDepth <= 0) {
           insideMultiLine = false;
           bracketDepth = 0;
+        }
+        continue;
+      }
+
+      // Check if we're starting a chained call (like fetch().then()...)
+      if (trimmedLine.match(/^[\w.]+\([^)]*\)$/) && !trimmedLine.endsWith(');')) {
+        // Look ahead to see if next line starts with a dot (method chaining)
+        if (i + 1 < lines.length && lines[i + 1].trim().startsWith('.')) {
+          insideChainedCall = true;
+          wrappedLines.push(line);
+          continue;
+        }
+      }
+
+      // If we're inside a chained call, keep adding lines until we're done
+      if (insideChainedCall) {
+        wrappedLines.push(line);
+        // Check if this is the last line in the chain
+        if (!trimmedLine.startsWith('.') || trimmedLine.endsWith(')') && !lines[i + 1]?.trim().startsWith('.')) {
+          insideChainedCall = false;
         }
         continue;
       }
@@ -339,6 +385,16 @@ export class CodeExecutor {
    * @returns true if it should be auto-logged
    */
   private shouldAutoLog(line: string): boolean {
+    // Don't auto-log if the line appears to continue (ends with operators, dots, etc.)
+    if (/[.+\-*\/,]$/.test(line)) {
+      return false;
+    }
+
+    // Don't auto-log promise chain methods
+    if (/^\.(then|catch|finally)\(/.test(line)) {
+      return false;
+    }
+
     // Don't log if line ends with semicolon in some cases
     const lineWithoutSemicolon = line.replace(/;$/, '');
 
@@ -379,11 +435,88 @@ export class CodeExecutor {
     if (typeof value === 'function') {
       return value.toString();
     }
+
+    // Check if it's an array of objects (suitable for table display)
+    if (Array.isArray(value) && value.length > 0 && this.isArrayOfObjects(value)) {
+      return this.formatAsTable(value);
+    }
+
     try {
       return JSON.stringify(value, null, 2);
     } catch {
       return String(value);
     }
+  }
+
+  /**
+   * Checks if an array contains objects (not primitives)
+   */
+  private isArrayOfObjects(arr: any[]): boolean {
+    if (arr.length === 0) return false;
+
+    // Check if at least the first item is a plain object
+    const first = arr[0];
+    return first !== null && typeof first === 'object' && !Array.isArray(first) && !(first instanceof Date);
+  }
+
+  /**
+   * Formats an array of objects as an HTML table
+   */
+  private formatAsTable(arr: any[]): string {
+    if (arr.length === 0) return '[]';
+
+    // Extract all unique keys from all objects
+    const keys = new Set<string>();
+    arr.forEach(obj => {
+      if (obj && typeof obj === 'object') {
+        Object.keys(obj).forEach(key => keys.add(key));
+      }
+    });
+
+    const headers = Array.from(keys);
+
+    // Build HTML table
+    let table = '<table class="data-table">\n';
+
+    // Header row
+    table += '  <thead>\n    <tr>\n';
+    headers.forEach(header => {
+      table += `      <th>${this.escapeHtml(header)}</th>\n`;
+    });
+    table += '    </tr>\n  </thead>\n';
+
+    // Body rows
+    table += '  <tbody>\n';
+    arr.forEach(obj => {
+      table += '    <tr>\n';
+      headers.forEach(header => {
+        const value = obj[header];
+        const displayValue = value === undefined ? '' :
+          value === null ? 'null' :
+            typeof value === 'object' ? JSON.stringify(value) :
+              String(value);
+        table += `      <td>${this.escapeHtml(displayValue)}</td>\n`;
+      });
+      table += '    </tr>\n';
+    });
+    table += '  </tbody>\n';
+    table += '</table>';
+
+    return table;
+  }
+
+  /**
+   * Escapes HTML special characters
+   */
+  private escapeHtml(text: string): string {
+    const map: Record<string, string> = {
+      '&': '&amp;',
+      '<': '&lt;',
+      '>': '&gt;',
+      '"': '&quot;',
+      "'": '&#039;',
+    };
+    return String(text).replace(/[&<>"']/g, char => map[char]);
   }
 
   /**

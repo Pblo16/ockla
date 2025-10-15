@@ -1,7 +1,7 @@
 import * as vscode from 'vscode';
 import { CodeExecutor } from './services/codeExecutor';
 import { OutputPanel } from './ui/outputPanel';
-import { RunCodeCommand, ClearOutputCommand, ToggleAutoRunCommand } from './commands';
+import { RunCodeCommand, ClearOutputCommand, ToggleAutoRunCommand, StopExecutionCommand } from './commands';
 import { FileWatcher } from './watchers/fileWatcher';
 import { COMMANDS } from './constants';
 
@@ -19,6 +19,7 @@ export function activate(context: vscode.ExtensionContext) {
 	const runCodeCommand = new RunCodeCommand(codeExecutor, outputPanel);
 	const clearOutputCommand = new ClearOutputCommand(outputPanel);
 	const toggleAutoRunCommand = new ToggleAutoRunCommand();
+	const stopExecutionCommand = new StopExecutionCommand(codeExecutor);
 
 	// Register commands
 	context.subscriptions.push(
@@ -31,6 +32,10 @@ export function activate(context: vscode.ExtensionContext) {
 
 	context.subscriptions.push(
 		vscode.commands.registerCommand(COMMANDS.TOGGLE_AUTO_RUN, () => toggleAutoRunCommand.execute())
+	);
+
+	context.subscriptions.push(
+		vscode.commands.registerCommand(COMMANDS.STOP_EXECUTION, () => stopExecutionCommand.execute())
 	);
 
 	// Start file watcher

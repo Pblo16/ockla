@@ -30,6 +30,10 @@
       {
         "command": "ockla.toggleAutoRun",
         "title": "Ockla: Toggle Auto-Run"
+      },
+      {
+        "command": "ockla.stopExecution",
+        "title": "Ockla: Stop Execution"
       }
     ],
     "configuration": {

@@ -83,3 +83,15 @@ export class ToggleAutoRunCommand {
     vscode.window.showInformationMessage(message);
   }
 }
+
+/**
+ * Handles the stop execution command
+ */
+export class StopExecutionCommand {
+  constructor(private codeExecutor: CodeExecutor) { }
+
+  execute(): void {
+    this.codeExecutor.stopExecution();
+    vscode.window.showInformationMessage('Ejecución detenida');
+  }
+}
