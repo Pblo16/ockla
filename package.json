@@ -1,0 +1,88 @@
+{
+  "name": "ockla",
+  "displayName": "ockla",
+  "description": "Java Script runner for VSCode",
+  "version": "0.0.1",
+  "engines": {
+    "vscode": "^1.105.0"
+  },
+  "categories": [
+    "Other"
+  ],
+  "activationEvents": [],
+  "main": "./out/extension.js",
+  "contributes": {
+    "commands": [
+      {
+        "command": "ockla.runCode",
+        "title": "Ockla: Run JS"
+      },
+      {
+        "command": "ockla.clearOutput",
+        "title": "Ockla: Clear Output"
+      },
+      {
+        "command": "ockla.toggleAutoRun",
+        "title": "Ockla: Toggle Auto-Run"
+      }
+    ],
+    "configuration": {
+      "title": "Ockla",
+      "properties": {
+        "ockla.autoRunOnSave": {
+          "type": "boolean",
+          "default": false,
+          "description": "Automatically run JavaScript files when saved"
+        },
+        "ockla.showExecutionTime": {
+          "type": "boolean",
+          "default": true,
+          "description": "Show execution time in the output panel"
+        },
+        "ockla.maxOutputLength": {
+          "type": "number",
+          "default": 10000,
+          "description": "Maximum length of output to display (characters)"
+        },
+        "ockla.executionTimeout": {
+          "type": "number",
+          "default": 5000,
+          "description": "Maximum execution time in milliseconds"
+        },
+        "ockla.autoShowPanel": {
+          "type": "boolean",
+          "default": false,
+          "description": "Automatically switch to output panel when auto-running on save"
+        }
+      }
+    }
+  },
+  "scripts": {
+    "vscode:prepublish": "pnpm run package",
+    "compile": "webpack",
+    "watch": "webpack --watch",
+    "package": "webpack --mode production --devtool hidden-source-map",
+    "compile-tests": "tsc -p . --outDir out",
+    "watch-tests": "tsc -p . -w --outDir out",
+    "pretest": "pnpm run compile-tests && pnpm run compile && pnpm run lint",
+    "lint": "eslint src",
+    "test": "vscode-test"
+  },
+  "devDependencies": {
+    "@types/mocha": "^10.0.10",
+    "@types/node": "22.x",
+    "@types/vscode": "^1.105.0",
+    "@typescript-eslint/eslint-plugin": "^8.45.0",
+    "@typescript-eslint/parser": "^8.45.0",
+    "@vscode/test-cli": "^0.0.11",
+    "@vscode/test-electron": "^2.5.2",
+    "eslint": "^9.36.0",
+    "ts-loader": "^9.5.4",
+    "typescript": "^5.9.3",
+    "webpack": "^5.102.0",
+    "webpack-cli": "^6.0.1"
+  },
+  "dependencies": {
+    "isolated-vm": "^6.0.1"
+  }
+}
