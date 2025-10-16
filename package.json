@@ -3,7 +3,7 @@
   "displayName": "ockla",
   "description": "Java Script runner for VSCode",
   "publisher": "Phardez",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "engines": {
     "vscode": "^1.105.0"
   },
@@ -91,6 +91,7 @@
     "@typescript-eslint/parser": "^8.46.1",
     "@vscode/test-cli": "^0.0.11",
     "@vscode/test-electron": "^2.5.2",
+    "copy-webpack-plugin": "^13.0.1",
     "eslint": "^9.37.0",
     "ts-loader": "^9.5.4",
     "typescript": "^5.9.3",

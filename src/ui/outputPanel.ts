@@ -119,7 +119,14 @@ export class OutputPanel {
     const statusText = result.success ? 'Ejecución exitosa' : 'Error en la ejecución';
 
     // Read the HTML template
-    const htmlPath = path.join(this.context.extensionPath, 'src', 'ui', 'index.html');
+    // In production, the HTML is in dist/ui/index.html
+    // In development, it's in src/ui/index.html
+    let htmlPath = path.join(this.context.extensionPath, 'dist', 'ui', 'index.html');
+    if (!fs.existsSync(htmlPath)) {
+      // Fallback to development path
+      htmlPath = path.join(this.context.extensionPath, 'src', 'ui', 'index.html');
+    }
+
     let htmlTemplate = fs.readFileSync(htmlPath, 'utf8');
 
     // Prepare conditional HTML sections

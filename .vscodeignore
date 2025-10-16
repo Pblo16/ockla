@@ -12,3 +12,5 @@ vsc-extension-quickstart.md
 **/*.map
 **/*.ts
 **/.vscode-test.*
+# Include the dist folder with compiled code
+!dist/**
