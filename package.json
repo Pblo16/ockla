@@ -3,7 +3,7 @@
   "displayName": "ockla",
   "description": "Java Script runner for VSCode",
   "publisher": "Phardez",
-  "version": "0.0.1",
+  "version": "0.1.0",
   "engines": {
     "vscode": "^1.105.0"
   },
